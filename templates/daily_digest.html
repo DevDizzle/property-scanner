@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { background: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .header p { margin: 5px 0 0 0; color: #a0a0b0; font-size: 14px; }
+        .stats { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eaeaea; text-align: center; }
+        .stats span { display: inline-block; margin: 0 15px; font-weight: bold; font-size: 14px; }
+        .property-list { padding: 20px; }
+        .property-card { border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 20px; padding: 15px; background: #fafafa; }
+        .property-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .score { font-size: 20px; font-weight: bold; color: #2e7d32; }
+        .price { font-size: 18px; font-weight: bold; }
+        .address { font-size: 16px; font-weight: bold; color: #1a1a2e; text-decoration: none; }
+        .address:hover { text-decoration: underline; }
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .metric { font-size: 13px; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #eee; }
+        .metric-label { color: #666; font-size: 11px; text-transform: uppercase; display: block; }
+        .tax-shock { background: #ffebee; border: 1px solid #ffcdd2; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
+        .tax-shock-title { color: #c62828; font-weight: bold; font-size: 13px; margin-bottom: 5px; }
+        .ai-summary { background: #e3f2fd; padding: 10px; border-radius: 4px; font-size: 13px; border-left: 4px solid #1976d2; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #888; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>BPM Daily Deal Feed</h1>
+            <p>{{ date }}</p>
+        </div>
+        
+        <div class="stats">
+            <span>Scanned: {{ total_scanned }}</span>
+            <span>Avg Score: {{ "%.1f"|format(avg_score) }}</span>
+            <span>1% Rule: {{ num_1pct }}</span>
+        </div>
+        
+        <div class="property-list">
+            {% for deal in deals %}
+            <div class="property-card">
+                <div class="property-header">
+                    <div>
+                        <a href="{{ deal.url }}" class="address">{{ deal.address }}, {{ deal.city }} {{ deal.zip_code }}</a>
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">{{ deal.beds }} Beds • {{ deal.baths }} Baths • {{ deal.sqft }} SqFt</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="score">{{ "%.1f"|format(deal.score) }}/10</div>
+                        <div class="price">${{ "{:,.0f}".format(deal.price) }}</div>
+                    </div>
+                </div>
+                
+                <div class="tax-shock">
+                    <div class="tax-shock-title">⚠️ Tax Reset Impact</div>
+                    <div style="font-size: 13px;">
+                        {% if deal.tax_reset and deal.tax_reset.tax_increase_pct %}
+                            Current: ${{ "{:,.0f}".format(deal.tax_reset.current_tax_annual) }} &rarr; 
+                            <b>Post-Sale: ${{ "{:,.0f}".format(deal.tax_reset.post_sale_tax_annual) }}</b> 
+                            <span style="color: #c62828;">(+{{ "%.1f"|format(deal.tax_reset.tax_increase_pct) }}%)</span>
+                        {% else %}
+                            Post-Sale Tax: <b>${{ "{:,.0f}".format(deal.tax_reset.post_sale_tax_annual) if deal.tax_reset else "N/A" }}/yr</b>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric"><span class="metric-label">Est. Rent</span>${{ "{:,.0f}".format(deal.rent_estimate) if deal.rent_estimate else "N/A" }}/mo</div>
+                    <div class="metric"><span class="metric-label">Net Cash Flow</span>${{ "{:,.0f}".format(deal.net_monthly) if deal.net_monthly else "N/A" }}/mo</div>
+                    <div class="metric"><span class="metric-label">Gross Yield</span>{{ "%.1f"|format(deal.gross_yield_pct) if deal.gross_yield_pct else "N/A" }}%</div>
+                    <div class="metric"><span class="metric-label">Cash on Cash</span>{{ "%.1f"|format(deal.cash_on_cash_pct) if deal.cash_on_cash_pct else "N/A" }}%</div>
+                </div>
+                
+                <div class="ai-summary">
+                    <strong>AI Verdict:</strong> {{ deal.ai_summary if deal.ai_summary else "No summary available." }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="footer">
+            BPM REIA Property Scanner &copy; {{ date[:4] }}<br>
+            Powered by GammaRips Architecture
+        </div>
+    </div>
+</body>
+</html>

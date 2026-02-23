@@ -1,0 +1,51 @@
+# Property Scanner Configuration
+# Copy to config.yaml and fill in your keys
+
+gcp:
+  project_id: "profitscout-fida8"
+  dataset: "property_scanner"
+  region: "us-central1"
+
+apis:
+  rentcast:
+    api_key: "YOUR_RENTCAST_API_KEY"
+    base_url: "https://api.rentcast.io/v1"
+    monthly_limit: 50  # free tier
+  scrapingbee:
+    api_key: "YOUR_SCRAPINGBEE_API_KEY"
+    base_url: "https://app.scrapingbee.com/api/v1"
+  gemini:
+    model: "gemini-2.0-flash"
+
+targets:
+  # MVP: Fort Lauderdale demo zip
+  zip_codes:
+    - "33301"  # Fort Lauderdale
+  property_types:
+    - "Single Family"
+    - "Multi-Family"
+  price_range:
+    min: 100000
+    max: 1000000
+
+scoring:
+  weights:
+    yield: 0.25
+    discount: 0.25
+    urgency: 0.25
+    risk: 0.25
+  bonuses:
+    growing_zip: 1.0
+    below_median: 1.0
+    distress_code: 1.5
+    gentrification_signal: 0.5
+
+pipeline:
+  filter_top_pct: 0.20  # Only enrich top 20%
+  ai_summary_top_n: 5   # Gemini summaries for top N
+  max_listings_per_zip: 200
+
+delivery:
+  sendgrid_api_key: "YOUR_SENDGRID_KEY"
+  from_email: "deals@evanparra.ai"
+  digest_subject: "BPM Daily Deal Feed — {date}"
