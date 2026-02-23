@@ -15,6 +15,7 @@ apis:
     api_key: "YOUR_SCRAPINGBEE_API_KEY"
     base_url: "https://app.scrapingbee.com/api/v1"
   gemini:
+    api_key: "YOUR_GEMINI_API_KEY"
     model: "gemini-2.0-flash"
 
 targets:

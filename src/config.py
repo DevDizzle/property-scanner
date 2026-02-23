@@ -20,6 +20,7 @@ def load_config() -> dict:
     env_overrides = {
         "RENTCAST_API_KEY": ("apis", "rentcast", "api_key"),
         "SCRAPINGBEE_API_KEY": ("apis", "scrapingbee", "api_key"),
+        "GEMINI_API_KEY": ("apis", "gemini", "api_key"),
         "SENDGRID_API_KEY": ("delivery", "sendgrid_api_key"),
         "GCP_PROJECT_ID": ("gcp", "project_id"),
     }

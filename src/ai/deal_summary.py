@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 def _get_model():
     config = get_config()
+    api_key = config["apis"]["gemini"].get("api_key")
+    if api_key and api_key != "YOUR_GEMINI_API_KEY":
+        genai.configure(api_key=api_key)
+    
     model_name = config["apis"]["gemini"]["model"]
     return genai.GenerativeModel(model_name)
 
