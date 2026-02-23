@@ -96,7 +96,13 @@ def load_latest_data() -> pd.DataFrame:
         """
         query_job = client.query(query)
         rows = query_job.result()
-        data = [json.loads(row.scored_data) for row in rows]
+        data = []
+        for row in rows:
+            # BigQuery JSON columns are automatically deserialized into Python dicts by the client
+            if isinstance(row.scored_data, str):
+                data.append(json.loads(row.scored_data))
+            else:
+                data.append(row.scored_data)
         
         if data:
             logger.info("Successfully loaded latest scan data from BigQuery.")
