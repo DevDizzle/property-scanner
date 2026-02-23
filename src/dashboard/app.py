@@ -73,10 +73,18 @@ def load_latest_data() -> pd.DataFrame:
     # Attempt BigQuery first (for Streamlit Community Cloud)
     try:
         from google.cloud import bigquery
+        from google.oauth2 import service_account
         
-        # If running on Streamlit Cloud, it will look for st.secrets["gcp_service_account"]
-        # or the GOOGLE_APPLICATION_CREDENTIALS environment variable.
-        client = bigquery.Client(project="profitscout-fida8")
+        # Check if we have Streamlit secrets configured
+        if "gcp_service_account" in st.secrets:
+            # Use credentials from Streamlit secrets
+            creds = service_account.Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"]
+            )
+            client = bigquery.Client(project="profitscout-fida8", credentials=creds)
+        else:
+            # Fallback to local default credentials
+            client = bigquery.Client(project="profitscout-fida8")
         
         query = """
             SELECT scored_data
