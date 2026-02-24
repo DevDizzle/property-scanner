@@ -22,4 +22,4 @@ __pycache__/
 data/
 config/config.yaml
 .streamlit/secrets.toml
-sa_key.json
+sa_key*.json

@@ -20,10 +20,10 @@ def get_client() -> ScrapingBeeClient:
 
 def build_redfin_url(zip_code: str, min_price: int = 100000, max_price: int = 1000000) -> str:
     """Build Redfin search URL for a zip code with filters."""
-    # Redfin filter URL format for SFR + multi-family in price range
+    # Redfin filter URL format for SFR + multi-family + condo + townhome in price range
     return (
         f"https://www.redfin.com/zipcode/{zip_code}"
-        f"/filter/property-type=house+multifamily,"
+        f"/filter/property-type=house+multifamily+condo+townhouse,"
         f"min-price={min_price},max-price={max_price},"
         f"include=sold-3mo"
     )
@@ -46,9 +46,18 @@ def scrape_listings_page(client: ScrapingBeeClient, url: str) -> str:
     return response.text
 
 
-def parse_redfin_download_url(zip_code: str) -> str:
+def get_region_id_from_html(html: str) -> Optional[str]:
+    """Extract Redfin's internal region_id from the page source."""
+    matches = re.findall(r'regionId[\"\'\:=]+(\d+)', html, re.IGNORECASE)
+    if matches:
+        return matches[0]
+    return None
+
+
+def parse_redfin_download_url(region_id: str, min_price: int, max_price: int) -> str:
     """Build Redfin CSV download URL — more reliable than HTML parsing."""
     # Redfin offers a CSV download endpoint for search results
+    # Added price limits and uipt=1,2,3,4 to include SFR, Condos, Townhouses, and Multi-Family
     return (
         f"https://www.redfin.com/stingray/api/gis-csv?"
         f"al=1&has_deal=false&has_dishwasher=false&has_laundry_facility=false"
@@ -56,15 +65,16 @@ def parse_redfin_download_url(zip_code: str) -> str:
         f"&has_short_term_rental=false&include_pending_homes=false"
         f"&isRentals=false&is_senior_living=false"
         f"&num_homes=350&ord=redfin-recommended-asc"
-        f"&page_number=1&pool=false&region_id={zip_code}&region_type=2"
-        f"&sf=1,2,3,5,6,7&status=9&uipt=1,2&v=8"
+        f"&page_number=1&pool=false&region_id={region_id}&region_type=2"
+        f"&sf=1,2,3,5,6,7&status=9&uipt=1,2,3,4&v=8"
+        f"&min_price={min_price}&max_price={max_price}"
     )
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
-def scrape_csv_download(client: ScrapingBeeClient, zip_code: str) -> str:
+def scrape_csv_download(client: ScrapingBeeClient, region_id: str, min_price: int, max_price: int) -> str:
     """Try Redfin's CSV download endpoint — structured data, no HTML parsing."""
-    url = parse_redfin_download_url(zip_code)
+    url = parse_redfin_download_url(region_id, min_price, max_price)
     response = client.get(
         url,
         params={
@@ -121,12 +131,16 @@ def parse_redfin_csv(csv_text: str) -> list[dict]:
     
     for row in reader:
         try:
+            # Check for bad rows that don't have proper ADDRESS columns
+            if "ADDRESS" not in row or not row.get("ADDRESS"):
+                continue
+
             listing = {
                 "source": "redfin",
                 "address": row.get("ADDRESS", "").strip(),
-                "city": row.get("CITY", "").strip(),
+                "city": row.get("CITY", "").strip() if row.get("CITY") else "",
                 "state": row.get("STATE OR PROVINCE", "FL"),
-                "zip_code": row.get("ZIP OR POSTAL CODE", "").strip(),
+                "zip_code": row.get("ZIP OR POSTAL CODE", "").strip() if row.get("ZIP OR POSTAL CODE") else "",
                 "price": _safe_float(row.get("PRICE")),
                 "beds": _safe_int(row.get("BEDS")),
                 "baths": _safe_float(row.get("BATHS")),
@@ -134,12 +148,12 @@ def parse_redfin_csv(csv_text: str) -> list[dict]:
                 "lot_sqft": _safe_float(row.get("LOT SIZE")),
                 "year_built": _safe_int(row.get("YEAR BUILT")),
                 "dom": _safe_int(row.get("DAYS ON MARKET")),
-                "property_type": row.get("PROPERTY TYPE", "").strip(),
-                "url": row.get("URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)", "").strip(),
+                "property_type": row.get("PROPERTY TYPE", "").strip() if row.get("PROPERTY TYPE") else "",
+                "url": row.get("URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)", "").strip() if row.get("URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)") else "",
                 "latitude": _safe_float(row.get("LATITUDE")),
                 "longitude": _safe_float(row.get("LONGITUDE")),
-                "status": row.get("STATUS", "").strip(),
-                "listing_id": row.get("MLS#", "").strip(),
+                "status": row.get("STATUS", "").strip() if row.get("STATUS") else "",
+                "listing_id": row.get("MLS#", "").strip() if row.get("MLS#") else "",
                 "price_per_sqft": None,
                 "scraped_at": datetime.utcnow().isoformat(),
             }
@@ -245,23 +259,48 @@ async def scrape_zip_code(zip_code: str, limit: int = 200) -> list[dict]:
     
     logger.info(f"Scraping zip {zip_code} (${price_range['min']:,}-${price_range['max']:,})")
     
-    # Try CSV first
+    html_url = build_redfin_url(zip_code, price_range["min"], price_range["max"])
+    logger.info(f"Fetching region ID from: {html_url}")
+    
     try:
-        csv_text = scrape_csv_download(client, zip_code)
-        listings = parse_redfin_csv(csv_text)
-        if listings:
-            logger.info(f"CSV download success: {len(listings)} listings for {zip_code}")
-            return listings[:limit]
+        html = scrape_listings_page(client, html_url)
     except Exception as e:
-        logger.warning(f"CSV download failed for {zip_code}: {e}")
+        logger.error(f"Failed to fetch initial HTML for {zip_code}: {e}")
+        return []
+
+    region_id = get_region_id_from_html(html)
+    
+    listings = []
+    if region_id:
+        logger.info(f"Found region ID: {region_id}")
+        try:
+            csv_text = scrape_csv_download(client, region_id, price_range["min"], price_range["max"])
+            listings = parse_redfin_csv(csv_text)
+        except Exception as e:
+            logger.warning(f"CSV download failed for {zip_code} (region {region_id}): {e}")
+    else:
+        logger.warning(f"Could not find region ID for {zip_code}. Falling back to HTML parse.")
     
     # Fall back to HTML
-    try:
-        url = build_redfin_url(zip_code, price_range["min"], price_range["max"])
-        html = scrape_listings_page(client, url)
+    if not listings:
         listings = parse_redfin_html(html)
-        logger.info(f"HTML scrape: {len(listings)} listings for {zip_code}")
-        return listings[:limit]
-    except Exception as e:
-        logger.error(f"All scraping methods failed for {zip_code}: {e}")
+        logger.info(f"HTML scrape returned {len(listings)} listings for {zip_code}")
+        
+    # Validate the results and enforce the correct zip code
+    valid_listings = []
+    discarded = 0
+    for l in listings:
+        if l.get("zip_code") == zip_code:
+            valid_listings.append(l)
+        else:
+            discarded += 1
+
+    logger.info(f"Valid listings matching zip {zip_code}: {len(valid_listings)}")
+    if discarded > 0:
+        logger.info(f"Discarded {discarded} listings that didn't match zip {zip_code}")
+        
+    if not valid_listings:
+        logger.error(f"No listings found in {zip_code}. Redfin may not have active inventory for this area.")
         return []
+
+    return valid_listings[:limit]

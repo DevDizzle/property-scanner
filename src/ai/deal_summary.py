@@ -2,21 +2,30 @@
 import logging
 from typing import Optional
 
-import google.generativeai as genai
-
 from src.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
-def _get_model():
+def _get_client_and_model():
+    from google import genai
     config = get_config()
-    api_key = config["apis"]["gemini"].get("api_key")
-    if api_key and api_key != "YOUR_GEMINI_API_KEY":
-        genai.configure(api_key=api_key)
     
+    # Check if using GCP Vertex AI
+    project_id = config.get("gcp", {}).get("project_id")
+    api_key = config["apis"]["gemini"].get("api_key")
     model_name = config["apis"]["gemini"]["model"]
-    return genai.GenerativeModel(model_name)
+
+    if project_id and (not api_key or api_key == "YOUR_GEMINI_API_KEY"):
+        # Use Vertex AI via Application Default Credentials
+        # Note: Gemini 3 Flash Preview is currently global-only
+        location = "global" if "gemini-3-flash" in model_name else config.get("gcp", {}).get("region", "us-central1")
+        client = genai.Client(vertexai=True, project=project_id, location=location)
+    else:
+        # Use direct Google AI Studio API key
+        client = genai.Client(api_key=api_key)
+    
+    return client, model_name
 
 
 def generate_deal_summary(listing: dict, tax_data: Optional[dict] = None) -> str:
@@ -25,7 +34,7 @@ def generate_deal_summary(listing: dict, tax_data: Optional[dict] = None) -> str
     Returns a concise, actionable summary that a REIA member
     can use to make a go/no-go decision in under 60 seconds.
     """
-    model = _get_model()
+    client, model_name = _get_client_and_model()
     
     # Build context
     rent = listing.get("rent_estimate", "N/A")
@@ -88,7 +97,10 @@ Write the summary in this format:
 Be direct. No fluff. Write like you're briefing an experienced investor who's seen 100 deals this week."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
         return response.text
     except Exception as e:
         logger.error(f"Gemini deal summary failed: {e}")

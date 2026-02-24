@@ -130,6 +130,42 @@ def get_value_estimate(
         return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
+def get_property_taxes(address: str) -> Optional[float]:
+    """Get the most recent property tax amount from RentCast."""
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/properties",
+            headers=_headers(),
+            params={"address": address},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if not data:
+            return None
+            
+        property_data = data[0]
+        taxes = property_data.get("propertyTaxes", {})
+        
+        if not taxes:
+            return None
+            
+        # Get the most recent year's tax amount
+        recent_year = max(taxes.keys())
+        return taxes[recent_year].get("total")
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            logger.warning("RentCast rate limit hit")
+            raise
+        logger.error(f"RentCast property data error for {address}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"RentCast property data request failed for {address}: {e}")
+        return None
+
+
 def enrich_listing(listing: dict) -> dict:
     """Enrich a single listing with RentCast data.
     
@@ -177,5 +213,10 @@ def enrich_listing(listing: dict) -> dict:
             listing["discount_to_value_pct"] = round(
                 (1 - listing["price"] / value_data["value"]) * 100, 2
             )
+            
+    # Get current property taxes
+    current_tax = get_property_taxes(address)
+    if current_tax:
+        listing["current_tax"] = current_tax
     
     return listing

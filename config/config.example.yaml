@@ -16,7 +16,7 @@ apis:
     base_url: "https://app.scrapingbee.com/api/v1"
   gemini:
     api_key: "YOUR_GEMINI_API_KEY"
-    model: "gemini-2.0-flash"
+    model: "gemini-3-flash-preview"
 
 targets:
   # MVP: Fort Lauderdale demo zip
