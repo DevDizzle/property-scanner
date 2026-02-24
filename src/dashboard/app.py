@@ -642,7 +642,8 @@ def render_dashboard():
     
     # --- UI Layout ---
     # Section 1
-    st.markdown(generate_snapshot_html(filtered_df, total_scanned, selected_zips), unsafe_allow_html=True)
+    snapshot_html = generate_snapshot_html(filtered_df, total_scanned, selected_zips)
+    st.markdown("\n".join(line.strip() for line in snapshot_html.split("\n")), unsafe_allow_html=True)
     
     # Section 2
     if filtered_df.empty:
@@ -654,12 +655,12 @@ def render_dashboard():
     
     for i, row in filtered_df.head(20).iterrows():
         card_html = generate_deal_card_html(row)
-        st.markdown(card_html, unsafe_allow_html=True)
+        st.markdown("\n".join(line.strip() for line in card_html.split("\n")), unsafe_allow_html=True)
         
     # Section 3
     tax_table_html = generate_tax_table_html(filtered_df)
     if tax_table_html:
-        st.markdown(tax_table_html, unsafe_allow_html=True)
+        st.markdown("\n".join(line.strip() for line in tax_table_html.split("\n")), unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
