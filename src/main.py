@@ -148,12 +148,6 @@ def run_pipeline(
     enriched.sort(key=lambda x: x.get("score", 0), reverse=True)
     
     _save_output(enriched, "scored_listings")
-    if not skip_bq:
-        try:
-            write_enriched_listings(enriched)
-            write_scored_listings(enriched)
-        except Exception as e:
-            logger.error(f"BQ write_scored_listings failed: {e}")
     
     # Step 6: AI summaries for top N
     if not skip_ai:
@@ -163,6 +157,13 @@ def run_pipeline(
             summary = generate_deal_summary(listing, listing.get("tax_reset"))
             listing["ai_summary"] = summary
             logger.info(f"  {listing['address']}: Score {listing['score']}")
+
+    if not skip_bq:
+        try:
+            write_enriched_listings(enriched)
+            write_scored_listings(enriched)
+        except Exception as e:
+            logger.error(f"BQ write_scored_listings failed: {e}")
     
     # Final output
     _save_output(enriched, "final_results")
